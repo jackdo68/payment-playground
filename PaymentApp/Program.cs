@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PaymentApp.Data;
 using PaymentApp.Models;
 using PaymentApp.Services.Auth;
+using PaymentApp.Services.Document;
 using PaymentApp.Services.Payment;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +14,7 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<PaymentDbContext>(options => options.UseNpgsql("Host=localhost;Database=payapp;Username=payapp;Password=devpass"));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<DocumentService>();
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 
 
