@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: payapp
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: payapp
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+  processor:
+    build: ./payment-processor
+    ports: ["4000:4000"]
+    environment:
+      DATABASE_URL: "postgres://payapp:devpass@db:5432/payapp"
+    depends_on: [db]
+
+  api:
+    build: ./PaymentApp
+    ports: ["8080:8080"]
+    environment:
+      ConnectionStrings__PaymentDb: "Host=db;Database=payapp;Username=payapp;Password=devpass"
+      PaymentProcessor__BaseUrl: "http://processor:4000"
+      Jwt__Key: "compose-secret-key-32-chars-minimum!!"
+      Jwt__Issuer: "paymentapp"
+    depends_on: [db, processor]
+
+volumes:
+  pgdata:

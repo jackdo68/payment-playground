@@ -1,0 +1,37 @@
+# ---- .NET build output ----
+bin/
+obj/
+publish/
+publish-sc/
+
+# ---- IDE / editor state ----
+.vs/                 # Visual Studio
+*.user               # per-user project settings (never shared)
+.idea/               # Rider
+# .vscode/ is intentionally NOT ignored: launch.json / settings.json are worth sharing.
+# If you keep personal stuff there, ignore selectively instead.
+
+# ---- Test & coverage output ----
+TestResults/
+coverage*.json
+coverage*.xml
+*.trx
+
+# ---- Local EF Core / dev leftovers ----
+*.db
+*.db-shm
+*.db-wal
+
+# ---- Node (payment-processor, Topic 10) ----
+node_modules/
+npm-debug.log*
+
+# ---- OS noise ----
+.DS_Store
+Thumbs.db
+
+# ---- Local-only secrets ----
+# Real secrets come from env vars / user-secrets, but belt-and-braces:
+*.env
+.env.*
+appsettings.*.Local.json
