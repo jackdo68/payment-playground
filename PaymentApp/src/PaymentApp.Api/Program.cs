@@ -20,6 +20,7 @@ builder.Services.AddDbContext<PaymentDbContext>(options =>
 // Register services (Scoped = one instance per HTTP request)
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IDocumentService, DocumentService>();
 
 // Register password hasher (Singleton = one instance for app lifetime)
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
