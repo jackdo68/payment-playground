@@ -33,16 +33,33 @@ public class DocumentController : ControllerBase
         // Task.Run moves CPU-bound work off the request thread
         var result = await Task.Run(() => _documentService.Scan(file.FileName, bytes));
 
-        // I/O: store on disk and update user
+        // I/O: store the file AND its metadata; return the metadata to the caller
         try
         {
-            await _documentService.StoreAsync(userId, file.FileName, bytes);
+            var meta = await _documentService.StoreAsync(userId, file.FileName, bytes, result);
+            return Ok(meta);
         }
         catch (UserNotFoundException ex)
         {
             return NotFound(new { code = ex.Code, message = ex.Message });
         }
+    }
 
-        return Ok(result);
+    [HttpGet("download")]
+    public async Task<IActionResult> Download(int userId)
+    {
+        try
+        {
+            var (content, meta) = await _documentService.OpenAsync(userId);
+            return File(content, "application/octet-stream", meta.OriginalName);
+        }
+        catch (UserNotFoundException ex)
+        {
+            return NotFound(new { code = ex.Code, message = ex.Message });
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException)
+        {
+            return NotFound(new { error = ex.Message });
+        }
     }
 }

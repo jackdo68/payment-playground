@@ -13,5 +13,8 @@ public interface IDocumentService
     /// <summary>
     /// I/O-bound: store the document on disk and update the user.
     /// </summary>
-    Task StoreAsync(int userId, string fileName, byte[] content);
+    Task<DocumentMetadata> StoreAsync(int userId, string fileName, byte[] content, ScanResult scan);
+
+    // Returns an open read-stream for the user's document + its metadata.
+    Task<(Stream Content, DocumentMetadata Meta)> OpenAsync(int userId);
 }

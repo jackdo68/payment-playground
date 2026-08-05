@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PaymentApp.Application.DTOs;
 using PaymentApp.Application.Interfaces;
@@ -13,6 +14,16 @@ public class DocumentService : IDocumentService
     private readonly PaymentDbContext _db;
     private readonly string _uploadDir;
 
+    // Write pretty, camelCase JSON (readable when you `cat` the sidecar).
+    private static readonly JsonSerializerOptions _jsonWrite = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+    };
+
+    // Web defaults are camelCase + case-insensitive — perfect for reading it back.
+    private static readonly JsonSerializerOptions _jsonRead = new(JsonSerializerDefaults.Web);
+
     public DocumentService(PaymentDbContext db)
     {
         _db = db;
@@ -20,44 +31,64 @@ public class DocumentService : IDocumentService
         Directory.CreateDirectory(_uploadDir);
     }
 
-    // CPU-BOUND: No awaits — this method burns CPU cycles
-    // The caller should use Task.Run to move this off the request thread
     public ScanResult Scan(string fileName, byte[] content)
     {
-        // Hash the content (CPU-intensive)
         var hash = Convert.ToHexString(SHA256.HashData(content));
-
-        // Parse as text
         var text = Encoding.UTF8.GetString(content);
-
-        // Simulate CPU-heavy work (malware scan, OCR, etc.)
-        // In production, this might be ML inference, image processing, etc.
         double signal = 0;
-        for (int i = 0; i < 5_000_000; i++)
-            signal += Math.Sqrt(i);
-
-        // Analyze the text
+        for (int i = 0; i < 5_000_000; i++) signal += Math.Sqrt(i);
         var words = text.Split(default(char[]?), StringSplitOptions.RemoveEmptyEntries).Length;
         var flagged = text.Contains("fraud", StringComparison.OrdinalIgnoreCase);
-
         return new ScanResult(fileName, words, hash, flagged);
     }
 
-    // I/O-BOUND: Uses await — call normally with await
-    public async Task StoreAsync(int userId, string fileName, byte[] content)
+    public async Task<DocumentMetadata> StoreAsync(int userId, string fileName, byte[] content, ScanResult scan)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId)
             ?? throw new UserNotFoundException(userId);
 
-        // Generate a unique filename
         var storedName = $"{userId}_{Guid.NewGuid():N}{Path.GetExtension(fileName)}";
         var filePath = Path.Combine(_uploadDir, storedName);
+        await File.WriteAllBytesAsync(filePath, content);   // I/O: the file itself
 
-        // Write to disk (I/O)
-        await File.WriteAllBytesAsync(filePath, content);
+        // Build metadata and serialize it to a sidecar: "<storedName>.meta.json"
+        var meta = new DocumentMetadata(
+            OriginalName: fileName,
+            StoredName: storedName,
+            SizeBytes: content.LongLength,
+            Sha256: scan.Sha256,
+            Words: scan.Words,
+            Flagged: scan.Flagged,
+            UploadedAtUtc: DateTime.UtcNow);       // always store timestamps in UTC
 
-        // Update user record
+        var metaPath = filePath + ".meta.json";
+        await File.WriteAllTextAsync(metaPath, JsonSerializer.Serialize(meta, _jsonWrite));
+
         user.DocumentPath = storedName;
         await _db.SaveChangesAsync();
+        return meta;
+    }
+
+    public async Task<(Stream Content, DocumentMetadata Meta)> OpenAsync(int userId)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId)
+            ?? throw new UserNotFoundException(userId);
+
+        if (string.IsNullOrEmpty(user.DocumentPath))
+            throw new InvalidOperationException($"User {userId} has no document on file.");
+
+        var filePath = Path.Combine(_uploadDir, user.DocumentPath);
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException("Stored document is missing.", user.DocumentPath);
+
+        // Read the sidecar back into the record (JSON -> object)
+        var metaPath = filePath + ".meta.json";
+        var meta = JsonSerializer.Deserialize<DocumentMetadata>(
+            await File.ReadAllTextAsync(metaPath), _jsonRead)!;
+
+        // Open a READ STREAM — the framework streams these bytes to the client and
+        // disposes the stream for us. A 2 GB file uses a small buffer, not 2 GB of RAM.
+        Stream content = File.OpenRead(filePath);
+        return (content, meta);
     }
 }
