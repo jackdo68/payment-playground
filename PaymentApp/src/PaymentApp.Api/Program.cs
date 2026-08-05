@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PaymentApp.Application.Interfaces;
 using PaymentApp.Domain.Entities;
+using PaymentApp.Infrastructure.Clients;
 using PaymentApp.Infrastructure.Data;
 using PaymentApp.Infrastructure.Services;
 
@@ -21,6 +22,13 @@ builder.Services.AddDbContext<PaymentDbContext>(options =>
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
+// reuses for the payment processor — one pooled handler, no socket exhaustion.
+builder.Services.AddHttpClient(HttpClientNames.Fx, client =>
+{
+    client.BaseAddress = new Uri("https://api.frankfurter.app/");
+});
+
+builder.Services.AddScoped<ExchangeRateClient>();
 
 // Register password hasher (Singleton = one instance for app lifetime)
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();

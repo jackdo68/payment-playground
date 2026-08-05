@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using PaymentApp.Application.DTOs;
 using PaymentApp.Application.Interfaces;
 using PaymentApp.Domain.Exceptions;
+using PaymentApp.Infrastructure.Clients;
 using PaymentApp.Infrastructure.Data;
 
 namespace PaymentApp.Infrastructure.Services;
@@ -13,6 +14,7 @@ namespace PaymentApp.Infrastructure.Services;
 public class DocumentService : IDocumentService
 {
     private readonly PaymentDbContext _db;
+    private readonly ExchangeRateClient _fx;
     private readonly string _uploadDir;
 
     // Write pretty, camelCase JSON (readable when you `cat` the sidecar).
@@ -25,9 +27,10 @@ public class DocumentService : IDocumentService
     // Web defaults are camelCase + case-insensitive — perfect for reading it back.
     private static readonly JsonSerializerOptions _jsonRead = new(JsonSerializerDefaults.Web);
 
-    public DocumentService(PaymentDbContext db)
+    public DocumentService(PaymentDbContext db, ExchangeRateClient fx)
     {
         _db = db;
+        _fx = fx;
         _uploadDir = Path.Combine(AppContext.BaseDirectory, "uploads");
         Directory.CreateDirectory(_uploadDir);
     }
@@ -108,6 +111,14 @@ public class DocumentService : IDocumentService
         ("Current balance", user.Balance.ToString("C", usd)),   // $1,000.00
         ("Document on file", string.IsNullOrEmpty(user.DocumentPath) ? "(none)" : user.DocumentPath),
     };
+        // Optional: convert the balance to another currency using the live rate.
+        if (!string.IsNullOrEmpty(currency) &&
+            !currency.Equals("USD", StringComparison.OrdinalIgnoreCase))
+        {
+            var fx = await _fx.GetRateAsync("USD", currency.ToUpperInvariant());
+            var converted = user.Balance * fx.Rate;
+            lines.Add(($"Balance ({fx.To})", $"{converted:N2} @ {fx.Rate} on {fx.Date:yyyy-MM-dd}"));
+        }
 
         // StringBuilder: build the report with one buffer, not string + string + ...
         var sb = new StringBuilder();
@@ -118,6 +129,7 @@ public class DocumentService : IDocumentService
             sb.AppendLine($"{label,-18}: {value,38} |");   // {,-18} left-pads the label to 18 cols
         sb.AppendLine();
         sb.AppendLine("Thank you for banking with PaymentApp.");
+
         return sb.ToString();
     }
 }
