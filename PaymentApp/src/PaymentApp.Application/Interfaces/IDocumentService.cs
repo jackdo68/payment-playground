@@ -17,4 +17,5 @@ public interface IDocumentService
 
     // Returns an open read-stream for the user's document + its metadata.
     Task<(Stream Content, DocumentMetadata Meta)> OpenAsync(int userId);
+    Task<string> BuildStatementAsync(int userId, string? currency = null);
 }

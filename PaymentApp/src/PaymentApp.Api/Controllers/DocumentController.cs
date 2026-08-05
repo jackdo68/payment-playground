@@ -62,4 +62,18 @@ public class DocumentController : ControllerBase
             return NotFound(new { error = ex.Message });
         }
     }
+
+    [HttpGet("statement")]
+    public async Task<IActionResult> Statement(int userId, string? currency = null)
+    {
+        try
+        {
+            var text = await _documentService.BuildStatementAsync(userId, currency);
+            return Content(text, "text/plain");
+        }
+        catch (UserNotFoundException ex)
+        {
+            return NotFound(new { code = ex.Code, message = ex.Message });
+        }
+    }
 }

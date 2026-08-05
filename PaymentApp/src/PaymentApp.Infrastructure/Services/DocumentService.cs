@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -90,5 +91,33 @@ public class DocumentService : IDocumentService
         // disposes the stream for us. A 2 GB file uses a small buffer, not 2 GB of RAM.
         Stream content = File.OpenRead(filePath);
         return (content, meta);
+    }
+
+    public async Task<string> BuildStatementAsync(int userId, string? currency = null)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId)
+            ?? throw new UserNotFoundException(userId);
+
+        var usd = CultureInfo.GetCultureInfo("en-US");
+
+        // A small collection of label/value rows — iterated to render the body.
+        var lines = new List<(string Label, string Value)>
+    {
+        ("Account holder", user.Name),
+        ("Email", user.Email),
+        ("Current balance", user.Balance.ToString("C", usd)),   // $1,000.00
+        ("Document on file", string.IsNullOrEmpty(user.DocumentPath) ? "(none)" : user.DocumentPath),
+    };
+
+        // StringBuilder: build the report with one buffer, not string + string + ...
+        var sb = new StringBuilder();
+        sb.AppendLine("=== PaymentApp Account Statement ===");
+        sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+        sb.AppendLine();
+        foreach (var (label, value) in lines)
+            sb.AppendLine($"{label,-18}: {value,38} |");   // {,-18} left-pads the label to 18 cols
+        sb.AppendLine();
+        sb.AppendLine("Thank you for banking with PaymentApp.");
+        return sb.ToString();
     }
 }
